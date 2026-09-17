@@ -1,31 +1,24 @@
-"use client";
-
+import { connection } from "next/server";
+import { getLists } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createList, useLists } from "@/lib/store";
+import { createList } from "./actions";
 import { ListCard } from "./list-card";
 import { Toolbar } from "./toolbar";
 
-export default function Home() {
-  const lists = useLists();
+export default async function Home() {
+  await connection();
+  const lists = await getLists();
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-10">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight">Batch Tasks</h1>
-        <Toolbar lists={lists} />
+        <Toolbar hasLists={lists.length > 0} />
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const fd = new FormData(e.currentTarget);
-          createList(String(fd.get("name")), String(fd.get("tasks")));
-          e.currentTarget.reset();
-        }}
-        className="mb-10 space-y-3 rounded-xl border bg-card p-5"
-      >
+      <form action={createList} className="mb-10 space-y-3 rounded-xl border bg-card p-5">
         <h2 className="font-semibold">New list</h2>
         <Input name="name" placeholder="List name" />
         <Textarea name="tasks" rows={6} placeholder={"Paste tasks, one per line\nBuy milk\nCall mom\nShip v1"} />

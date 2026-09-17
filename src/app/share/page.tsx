@@ -1,19 +1,11 @@
-"use client";
-
-import { useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { decodeShare } from "@/lib/share";
-import { importShared } from "@/lib/store";
+import { importShared } from "../actions";
 
-const noop = () => () => {};
-
-export default function SharePage() {
-  const router = useRouter();
-  const d = useSyncExternalStore(noop, () => new URLSearchParams(location.search).get("d"), () => undefined);
-  if (d === undefined) return null;
-  const data = d ? decodeShare(d) : null;
+export default async function SharePage({ searchParams }: PageProps<"/share">) {
+  const { d } = await searchParams;
+  const data = typeof d === "string" ? decodeShare(d) : null;
 
   if (!data) {
     return (
@@ -39,14 +31,9 @@ export default function SharePage() {
           </li>
         ))}
       </ul>
-      <Button
-        onClick={() => {
-          importShared(data);
-          router.push("/");
-        }}
-      >
-        Import as new list
-      </Button>
+      <form action={importShared.bind(null, data)}>
+        <Button type="submit">Import as new list</Button>
+      </form>
     </main>
   );
 }

@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useOptimistic, useState } from "react";
 import { Check, Download, Link2, Trash2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
-import { toCsv } from "@/lib/csv";
 import { encodeShare } from "@/lib/share";
-import { addTasks, deleteList, deleteTask, downloadCsv, toggleTask, type List } from "@/lib/store";
+import type { List } from "@/lib/db";
+import { addTasks, deleteList, deleteTask, toggleTask } from "./actions";
 
 export function ListCard({ list }: { list: List }) {
-  const { id, name, tasks } = list;
+  const { id, name } = list;
+  const [tasks, setDone] = useOptimistic(list.tasks, (state, { taskId, done }: { taskId: string; done: boolean }) =>
+    state.map((t) => (t.id === taskId ? { ...t, done } : t)),
+  );
   const [copied, setCopied] = useState(false);
 
   const done = tasks.filter((t) => t.done).length;
@@ -19,7 +22,7 @@ export function ListCard({ list }: { list: List }) {
 
   const share = async () => {
     const d = encodeShare({ name, tasks: tasks.map(({ title, done }) => ({ title, done })) });
-    const url = `${location.origin}${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/share/?d=${d}`;
+    const url = `${location.origin}/share?d=${d}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: name, url });
@@ -39,15 +42,14 @@ export function ListCard({ list }: { list: List }) {
           <Button variant="ghost" size="icon" onClick={share} aria-label="Share list" title="Share list">
             {copied ? <Check /> : <Link2 />}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
+          <a
+            href={`/export?list=${id}`}
+            className={buttonVariants({ variant: "ghost", size: "icon" })}
             aria-label="Export CSV"
             title="Export CSV"
-            onClick={() => downloadCsv(name, toCsv(tasks.map((t) => ({ list: name, title: t.title, done: t.done }))))}
           >
             <Download />
-          </Button>
+          </a>
           <Button
             variant="ghost"
             size="icon"
@@ -70,7 +72,12 @@ export function ListCard({ list }: { list: List }) {
       <ul className="mb-4 space-y-1">
         {tasks.map((t) => (
           <li key={t.id} className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
-            <Checkbox id={t.id} checked={t.done} onCheckedChange={(checked) => toggleTask(id, t.id, checked)} />
+            <Checkbox id={t.id} checked={t.done} onCheckedChange={(done) =>
+                startTransition(async () => {
+                  setDone({ taskId: t.id, done });
+                  await toggleTask(t.id, done);
+                })
+              } />
             <label
               htmlFor={t.id}
               className={`flex-1 cursor-pointer text-sm transition-colors ${t.done ? "text-muted-foreground line-through" : ""}`}
@@ -78,7 +85,7 @@ export function ListCard({ list }: { list: List }) {
               {t.title}
             </label>
             <button
-              onClick={() => deleteTask(id, t.id)}
+              onClick={() => deleteTask(t.id)}
               aria-label={`Delete ${t.title}`}
               className="text-muted-foreground hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
             >
@@ -91,11 +98,7 @@ export function ListCard({ list }: { list: List }) {
       <details>
         <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Add tasks</summary>
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            addTasks(id, String(new FormData(e.currentTarget).get("tasks")));
-            e.currentTarget.reset();
-          }}
+          action={addTasks.bind(null, id)}
           className="mt-2 space-y-2"
         >
           <Textarea name="tasks" rows={4} placeholder={"One task per line\nPaste as many as you want"} required />

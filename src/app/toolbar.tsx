@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useTransition } from "react";
 import { Download, Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { parseCsv, toCsv } from "@/lib/csv";
-import { downloadCsv, importRows, type List } from "@/lib/store";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { importCsv } from "./actions";
 
-export function Toolbar({ lists }: { lists: List[] }) {
+export function Toolbar({ hasLists }: { hasLists: boolean }) {
   const input = useRef<HTMLInputElement>(null);
+  const [pending, startTransition] = useTransition();
   return (
     <div className="flex gap-2">
       <input
@@ -19,26 +19,24 @@ export function Toolbar({ lists }: { lists: List[] }) {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          try {
-            importRows(parseCsv(await file.text()));
-          } catch (err) {
-            alert(err instanceof Error ? err.message : "Import failed");
-          }
+          const text = await file.text();
+          startTransition(async () => {
+            try {
+              await importCsv(text);
+            } catch {
+              alert('Import failed. The CSV needs a "title" column.');
+            }
+          });
         }}
       />
-      <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
-        <Upload /> Import CSV
+      <Button variant="outline" size="sm" disabled={pending} onClick={() => input.current?.click()}>
+        <Upload /> {pending ? "Importing…" : "Import CSV"}
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!lists.length}
-        onClick={() =>
-          downloadCsv("tasks", toCsv(lists.flatMap((l) => l.tasks.map((t) => ({ list: l.name, title: t.title, done: t.done })))))
-        }
-      >
-        <Download /> Export all
-      </Button>
+      {hasLists && (
+        <a href="/export" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Download /> Export all
+        </a>
+      )}
     </div>
   );
 }
